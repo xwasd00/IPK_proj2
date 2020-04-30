@@ -1,10 +1,34 @@
 #include <iostream>
 #include <pcap.h>
 #include "Args.h"
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+
+#include <bitset>
 
 using namespace std;
 
+#define ETHERNET_SIZE 14
+
+void ipv4Header(ip* ip_header){
+	cout << "ipv4" << endl;
+}
+
+void ipv6Header(ip6_hdr* ip_header){
+	cout << "ipv6" << endl;
+}
+
+
 void callback(u_char *user, const struct pcap_pkthdr *header, const u_char *packet){
+	ip* ip_header = (ip*)(packet + ETHERNET_SIZE);
+	if (ip_header->ip_v != 4){
+		ip6_hdr* ip6_header = (ip6_hdr*)(ip_header);
+		ipv6Header(ip6_header);
+	}
+	else {
+		ipv4Header(ip_header);
+	}
+	
 	cout << "packet: " << packet << endl;
 }
 
