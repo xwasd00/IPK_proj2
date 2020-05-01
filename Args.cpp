@@ -16,27 +16,19 @@ int Args::getOpts(int argc, char** argv){
 	while((option = getopt_long(argc, argv, ":i:p:tun:", longopts, nullptr)) != -1){
       switch(option){
          case 'i':
-		 	cout << "-i argument ";
 			dev = optarg;
-			cout << dev << endl;
 			break;
          case 'p':
-		 	cout << "-p argument ";
 			port = stoi(optarg);
-			cout << port << endl;
 			break;
          case 't':
 		 	tcp = true;
-		 	cout << "-t argument " << endl;
             break;
          case 'u':
 		 	udp = true;
-		 	cout << "-u argument " << endl;
             break;
          case 'n':
-		 	cout << "-n argument ";
 			num = stoi(optarg);
-			cout << num << endl;
             break;
          case ':':
 		 	if(optopt == 'i'){
@@ -73,7 +65,6 @@ void Args::printDevs(){
 	pcap_freealldevs(alldevs);
 }
 void Args::setFilter(){
-	cout << "tcp: " << tcp << " udp: " << udp << endl;
 	if(port > 0){
 		if(!(udp ^ tcp)){
             filter = "tcp port ";
