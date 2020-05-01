@@ -5,8 +5,9 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <cstring>
 
-#include <bitset>
+
 
 using namespace std;
 
@@ -15,27 +16,28 @@ using namespace std;
 
 
 void printPacket(char* payload, short plen){
-	string buffer;
+	char buffer[17] = {0};
 
 
 	for( short i = 0; i < plen; i++){
 		if(i % 16 == 0){
-			cout << "0x" << hex << i << ":";
+			printf("0x%04x: ", i);
 		}
 		if(i % 8 == 0){
 			cout << " ";
 		}
 		printf("%02hhx ", payload[i]); 
 		
-		if(payload[i] > 32 && payload[i] < 126){
+		if( isprint(payload[i]) && payload[i] > 32 && payload[i] < 126){
 
-			buffer.append(&payload[i]);
+			buffer[i%16] = payload[i];
 		}
 		else{
-			buffer.append(".");
+			buffer[i%16] = '.';
 		}
 		if(i % 16 == 15){
-			cout << buffer.substr(i-15, 16) << endl;
+			cout << buffer << endl;
+			memset(&buffer, 0, sizeof(buffer));
 		}
 	}
 	if(plen % 16 != 0){
@@ -44,41 +46,11 @@ void printPacket(char* payload, short plen){
 		for( int i = 0; i < (offset + 16 - plen); i++){
 			cout  << "   ";
 		}
-		cout << buffer.substr(offset, plen - offset ) << endl;
+		cout << buffer << endl;
 	}
 	cout << dec;
-
-		
-
-	/*
-	for(short i = 0; i < line; i = i++){
-		cout << "0x" << hex <<  i*16 << ":  ";
-		for(short j = 0; j < 8; j++){
-			pos = j+i*16;
-			if(isprint(payload[pos])){
-				buffer.append(payload[pos]);
-			}
-			else{
-				buffer.append('.');
-			}	
-			cout << hex << int(payload[pos]) << " ";
-		} 
-		cout << " ";
-		for(int j= 8; j < 16; j++){
-			pos = j+i*16;
-			if(isprint(payload[pos])){
-				buffer.append(payload[pos]);
-			}
-			else{
-				buffer.append('.');
-			}	
-			cout << hex << int(payload[pos]) << "  ";
-		}
-
-		cout << buffer.substr() << endl;
-	}
-	cout << buffer << endl;*/
 }
+
 
 
 void getInfo(tcphdr* tcp, u_short* src_port, u_short* dst_port, u_char** payload,short* plen){
@@ -115,7 +87,7 @@ void printInfo(ip* iph, u_char** payload, short* plen){
 	}
 	
 	cout << inet_ntoa(iph->ip_src) << " : " << src_port << " > ";
-	cout << inet_ntoa(iph->ip_dst) << " : " << dst_port << endl;
+	cout << inet_ntoa(iph->ip_dst) << " : " << dst_port << endl << endl;
 }
 
 void printInfo(ip6_hdr* iph, u_char** payload, short* plen){
@@ -137,7 +109,7 @@ void printInfo(ip6_hdr* iph, u_char** payload, short* plen){
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_src), src, INET6_ADDRSTRLEN);
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_dst), dst, INET6_ADDRSTRLEN);
 	cout << src << " : " << src_port << " > ";
-	cout << dst << " : " << dst_port << endl;
+	cout << dst << " : " << dst_port << endl << endl;
 }
 
 
@@ -165,6 +137,7 @@ void callback(u_char* user, const struct pcap_pkthdr* header, const u_char* pack
 		return;
 	}
 	printPacket((char*)packet, header->caplen);
+	cout << endl;
 }
 
 int main(int argc, char** argv){
