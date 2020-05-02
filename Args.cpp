@@ -63,6 +63,7 @@ void Args::printDevs(){
 		dev = dev->next;
 	}
 	pcap_freealldevs(alldevs);
+	return;
 }
 void Args::setFilter(){
 	if(port > 0){
@@ -90,5 +91,5 @@ void Args::setFilter(){
 			filter = "udp";
 		}
 	}
-	cout << filter << endl;
+	return;
 }

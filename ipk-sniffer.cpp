@@ -6,7 +6,8 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <cstring>
-
+#include <iomanip>
+#include <arpa/inet.h>
 
 
 using namespace std;
@@ -15,129 +16,126 @@ using namespace std;
 #define TCP_PROTOCOL 6
 
 
-void printPacket(char* payload, short plen){
+void printPacket(char* payload, short len){
 	char buffer[17] = {0};
 
 
-	for( short i = 0; i < plen; i++){
+	for( short i = 0; i < len; i++){
 		if(i % 16 == 0){
 			printf("0x%04x: ", i);
 		}
 		if(i % 8 == 0){
 			cout << " ";
 		}
+		
 		printf("%02hhx ", payload[i]); 
 		
-		if( isprint(payload[i]) && payload[i] > 32 && payload[i] < 126){
-
+		if( payload[i] > 31 && payload[i] < 126){
 			buffer[i%16] = payload[i];
 		}
 		else{
 			buffer[i%16] = '.';
 		}
 		if(i % 16 == 15){
-			cout << buffer << endl;
+			cout << "  " << buffer << endl;
 			memset(&buffer, 0, sizeof(buffer));
 		}
 	}
-	if(plen % 16 != 0){
-		short offset = (plen/16)*16;
-		//cout << dec << endl << endl << offset << "  " << plen << endl;
-		for( int i = 0; i < (offset + 16 - plen); i++){
+	if(len % 16 != 0){
+		short fill = 16 - len%16;
+		for( int i = 0; i < fill; i++){
 			cout  << "   ";
 		}
-		cout << buffer << endl;
+		cout << "  " <<  buffer << endl;
 	}
 	cout << dec;
+	return;
 }
 
 
-
-void getInfo(tcphdr* tcp, u_short* src_port, u_short* dst_port, u_char** payload,short* plen){
-		*src_port = tcp->th_sport<<8 | tcp->th_dport>>8;
+void getInfo(tcphdr* tcp, u_short* src_port, u_short* dst_port, short* offset){
+		*src_port = tcp->th_sport<<8 | tcp->th_sport>>8;
 		*dst_port = tcp->th_dport<<8 | tcp->th_dport>>8;
-		*payload = (u_char*)(tcp + sizeof(tcphdr));
-		*plen = *plen - sizeof(tcphdr);
+		*offset = *offset + sizeof(tcphdr);
 		return;
 }
 
-void getInfo(udphdr* udp, u_short* src_port, u_short* dst_port, u_char** payload, short* plen){
+void getInfo(udphdr* udp, u_short* src_port, u_short* dst_port, short* offset){
 		*src_port = udp->uh_sport<<8 | udp->uh_sport>>8;
 		*dst_port = udp->uh_dport<<8 | udp->uh_dport>>8;
-		*payload = (u_char*)(udp + sizeof(udphdr));
-		*plen = *plen - sizeof(udphdr);
+		*offset = *offset + sizeof(udphdr);
 		return;
 }
 
 
-
-void printInfo(ip* iph, u_char** payload, short* plen){
-	
-	u_short src_port, dst_port;
-	*plen = iph->ip_len<<8 | iph->ip_len>>8;
-	*plen = *plen - iph->ip_hl*4;
+void getAddress(ip* iph, char* src_addr, char* dst_addr, bool* tcp, short* offset){
 	
 	if(iph->ip_p == TCP_PROTOCOL){
-		tcphdr* tcp = (tcphdr*)((const u_char*)iph + iph->ip_hl*4);
-		getInfo( tcp, &src_port, &dst_port, payload, plen );
+		*tcp = true;
 	}
 	else{
-		udphdr* udp = (udphdr*)((const u_char*)iph + iph->ip_hl*4);
-		getInfo( udp, &src_port, &dst_port, payload, plen );
+		*tcp = false;
 	}
-	
-	cout << inet_ntoa(iph->ip_src) << " : " << src_port << " > ";
-	cout << inet_ntoa(iph->ip_dst) << " : " << dst_port << endl << endl;
+	strcpy(src_addr, inet_ntoa(iph->ip_src));
+	strcpy(dst_addr, inet_ntoa(iph->ip_dst));
+	*offset = *offset + iph->ip_hl * 4;
 }
 
-void printInfo(ip6_hdr* iph, u_char** payload, short* plen){
-	
-	u_short src_port, dst_port;
-	*plen = iph->ip6_ctlun.ip6_un1.ip6_un1_plen<<8 | iph->ip6_ctlun.ip6_un1.ip6_un1_plen>>8;
+void getAddress(ip6_hdr* iph, char* src_addr, char* dst_addr, bool* tcp, short* offset){
 	
 	if(iph->ip6_ctlun.ip6_un1.ip6_un1_nxt == TCP_PROTOCOL){
-		tcphdr* tcp = (tcphdr*)((const u_char*)iph + sizeof(ip6_hdr));
-		getInfo( tcp, &src_port, &dst_port, payload, plen );
+		*tcp = true;
 	}
 	else{
-		udphdr* udp = (udphdr*)((const u_char*)iph + sizeof(ip6_hdr));
-		getInfo( udp, &src_port, &dst_port, payload, plen );
+		*tcp = false;
 	}
 	
 	char src[INET6_ADDRSTRLEN];
 	char dst[INET6_ADDRSTRLEN];
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_src), src, INET6_ADDRSTRLEN);
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_dst), dst, INET6_ADDRSTRLEN);
-	cout << src << " : " << src_port << " > ";
-	cout << dst << " : " << dst_port << endl << endl;
+	strcpy(src_addr, src);
+	strcpy(dst_addr, dst);
+	*offset = *offset + sizeof(ip6_hdr);
 }
 
 
 void callback(u_char* user, const struct pcap_pkthdr* header, const u_char* packet){
-	u_char* payload = nullptr;
-	short plen = 0;//TODO: plen a payload mazna neni treba
+	bool tcp = false;
+	u_short src_port, dst_port;
+	char src_addr[INET6_ADDRSTRLEN];
+	char dst_addr[INET6_ADDRSTRLEN];
+	short offset = ETHERNET_SIZE;
 
-	struct tm * time;
-	time = localtime(&(header->ts.tv_sec));
-	cout << time->tm_hour << ":" << time->tm_min << ":" << time->tm_sec;
-	cout << "." << header->ts.tv_usec << " ";
-
-
-	ip* ip_header = (ip*)(packet + ETHERNET_SIZE);
-	if (ip_header->ip_v == 4){
-		printInfo(ip_header, &payload, &plen);
+	ip* iph = (ip*)(packet + offset);
+	if (iph->ip_v == 4){
+		getAddress(iph, src_addr, dst_addr, &tcp, &offset);
 	}
 	else {
-		printInfo((ip6_hdr*)(ip_header), &payload, &plen);
+		getAddress((ip6_hdr*)(iph), src_addr, dst_addr, &tcp, &offset);
 	}
 
-
-	if(payload == nullptr){
-		cerr << "no data" << endl;
-		return;
+	if(tcp){
+		tcphdr* tcp = (tcphdr*)(packet + offset);
+		getInfo(tcp, &src_port, &dst_port, &offset);
 	}
+	else{
+		udphdr* udp = (udphdr*)(packet + offset);
+		getInfo(udp, &src_port, &dst_port, &offset);
+	}
+	
+	tm* time;
+	time = localtime(&(header->ts.tv_sec));	
+	printf("%02d:%02d:%02d.%d ", time->tm_hour, time->tm_min, time->tm_sec, (int)header->ts.tv_usec);
+	cout << src_addr << " : " << src_port << " > " << dst_addr << " : " << dst_port << endl << endl;
+
 	printPacket((char*)packet, header->caplen);
 	cout << endl;
+	/*printPacket((char*)packet, offset);
+	cout << endl;
+	printPacket((char*)(packet + offset), header->caplen - offset);
+	cout << endl;*/
+	return;
 }
 
 int main(int argc, char** argv){
