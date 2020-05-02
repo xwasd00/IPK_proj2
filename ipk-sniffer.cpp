@@ -8,7 +8,7 @@
 #include <cstring>
 #include <iomanip>
 #include <arpa/inet.h>
-
+#include <unistd.h>
 
 using namespace std;
 
@@ -76,6 +76,18 @@ void getAddress(ip* iph, char* src_addr, char* dst_addr, bool* tcp, short* offse
 	else{
 		*tcp = false;
 	}
+	/*
+	sockaddr_in sa;
+	char serv[NI_MAXSERV];
+	sa.sin_family = AF_INET;
+	sa.sin_addr = iph->ip_src;
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in), src_addr, NI_MAXHOST, 
+														serv, NI_MAXSERV, 0);
+	sa.sin_addr = iph->ip_dst;
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in), dst_addr, NI_MAXHOST, 
+														serv, NI_MAXSERV, 0);
+
+	*/
 	strcpy(src_addr, inet_ntoa(iph->ip_src));
 	strcpy(dst_addr, inet_ntoa(iph->ip_dst));
 	*offset = *offset + iph->ip_hl * 4;
@@ -89,13 +101,23 @@ void getAddress(ip6_hdr* iph, char* src_addr, char* dst_addr, bool* tcp, short* 
 	else{
 		*tcp = false;
 	}
+/*	
+	char serv[NI_MAXSERV];
+	sockaddr_in6 sa;
+	sa.sin6_family = AF_INET6;
+	sa.sin6_addr = iph->ip6_src;
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), src_addr, NI_MAXHOST, 
+															serv, NI_MAXSERV, 0);
+	sa.sin6_addr = iph->ip6_dst;
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), dst_addr, NI_MAXHOST, 
+															serv, NI_MAXSERV, 0);
+
+*/
 	
-	char src[INET6_ADDRSTRLEN];
-	char dst[INET6_ADDRSTRLEN];
-	inet_ntop(AF_INET6, (void*)&(iph->ip6_src), src, INET6_ADDRSTRLEN);
-	inet_ntop(AF_INET6, (void*)&(iph->ip6_dst), dst, INET6_ADDRSTRLEN);
-	strcpy(src_addr, src);
-	strcpy(dst_addr, dst);
+
+	inet_ntop(AF_INET6, (void*)&(iph->ip6_src), src_addr, INET6_ADDRSTRLEN);
+	inet_ntop(AF_INET6, (void*)&(iph->ip6_dst), dst_addr, INET6_ADDRSTRLEN);
+	
 	*offset = *offset + sizeof(ip6_hdr);
 }
 
@@ -103,9 +125,12 @@ void getAddress(ip6_hdr* iph, char* src_addr, char* dst_addr, bool* tcp, short* 
 void callback(u_char* user, const struct pcap_pkthdr* header, const u_char* packet){
 	bool tcp = false;
 	u_short src_port, dst_port;
+	short offset = ETHERNET_SIZE;
+	
 	char src_addr[INET6_ADDRSTRLEN];
 	char dst_addr[INET6_ADDRSTRLEN];
-	short offset = ETHERNET_SIZE;
+	/*char src_addr[NI_MAXHOST];
+	char dst_addr[NI_MAXHOST];*/
 
 	ip* iph = (ip*)(packet + offset);
 	if (iph->ip_v == 4){
