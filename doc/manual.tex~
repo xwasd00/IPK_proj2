@@ -1,0 +1,34 @@
+\documentclass[a4paper, 11pt, titlepage]{article}
+\usepackage{times}
+\usepackage[utf8]{inputenc}
+%\usepackage[czech]{babel}
+\usepackage[left=2cm, top=3cm, text={17cm, 24cm}]{geometry}
+\usepackage{bigfoot}
+\usepackage{multirow}
+\usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{pdflscape}
+\usepackage[unicode]{hyperref}
+\urlstyle{same}
+
+%% TODO: odkazy: url, na sekci
+
+\begin{document}
+
+\include{title}
+\input{tabulky}
+\input{algoritmy}
+\input{obrazky}
+
+Odkazy (nejen ty) na obrázky \ref{obrazek 1}, \ref{obrazek 2} a \ref{obrazek 3}, na  
+tabulky \ref{tabulka 1} a \ref{tabulka 2} a také na algoritmus \ref{algoritmus 1} jsou udělány pomocí 
+křížových odkazů. Pak je ovšem potřeba zdrojový soubor přeložit dvakrát.
+
+
+Vektorové obrázky lze vytvořit i přímo v~\LaTeX u, například pomocí prostředí 
+\texttt{picture}.
+
+\include{dum}
+
+\end{document}
