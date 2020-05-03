@@ -14,41 +14,50 @@ using namespace std;
 
 #define ETHERNET_SIZE 14
 #define TCP_PROTOCOL 6
+#define CACHE_SIZE 10
+#define CACHE_BUFF 2048
+
+char cache[CACHE_SIZE][CACHE_BUFF] = {0, 0, 0, 0, 0};
+short off[CACHE_SIZE];
+stringstream ss[CACHE_SIZE];
+short ptr = 0;
 
 
-void printPacket(char* payload, short len){
+
+void printPacket(char* payload, short len, short offset){
 	char buffer[17] = {0};
+	short start = offset % 16;
+	short space = offset % 8;
+	short end_hex = (start + 15) % 16;
 
-
-	for( short i = 0; i < len; i++){
-		if(i % 16 == 0){
+	for( short i = offset; i < len; i++){
+		if(i % 16 == start){
 			printf("0x%04x: ", i);
 		}
-		if(i % 8 == 0){
+		if(i % 8 == space){
 			cout << " ";
 		}
 		
 		printf("%02hhx ", payload[i]); 
 		
 		if( payload[i] > 31 && payload[i] < 126){
-			buffer[i%16] = payload[i];
+			buffer[(i - start) % 16] = payload[i];
 		}
 		else{
-			buffer[i%16] = '.';
+			buffer[(i - start) % 16] = '.';
 		}
-		if(i % 16 == 15){
+		if(i % 16 == end_hex){
 			cout << "  " << buffer << endl;
 			memset(&buffer, 0, sizeof(buffer));
 		}
 	}
-	if(len % 16 != 0){
-		short fill = 16 - len%16;
+	if(len % 16 != start){
+		short fill = 16 - (len-offset)%16;
 		for( int i = 0; i < fill; i++){
 			cout  << "   ";
 		}
 		cout << "  " <<  buffer << endl;
 	}
-	cout << dec;
 	return;
 }
 
@@ -76,7 +85,7 @@ void getAddress(ip* iph, char* src_addr, char* dst_addr, bool* tcp, short* offse
 	else{
 		*tcp = false;
 	}
-	/*
+	
 	sockaddr_in sa;
 	char serv[NI_MAXSERV];
 	sa.sin_family = AF_INET;
@@ -87,9 +96,10 @@ void getAddress(ip* iph, char* src_addr, char* dst_addr, bool* tcp, short* offse
 	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in), dst_addr, NI_MAXHOST, 
 														serv, NI_MAXSERV, 0);
 
-	*/
+	/*
 	strcpy(src_addr, inet_ntoa(iph->ip_src));
 	strcpy(dst_addr, inet_ntoa(iph->ip_dst));
+	*/
 	*offset = *offset + iph->ip_hl * 4;
 }
 
@@ -101,36 +111,51 @@ void getAddress(ip6_hdr* iph, char* src_addr, char* dst_addr, bool* tcp, short* 
 	else{
 		*tcp = false;
 	}
-/*	
+	
 	char serv[NI_MAXSERV];
 	sockaddr_in6 sa;
 	sa.sin6_family = AF_INET6;
 	sa.sin6_addr = iph->ip6_src;
-	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), src_addr, NI_MAXHOST, 
-															serv, NI_MAXSERV, 0);
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), src_addr, NI_MAXHOST, serv, NI_MAXSERV, 0);
 	sa.sin6_addr = iph->ip6_dst;
-	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), dst_addr, NI_MAXHOST, 
-															serv, NI_MAXSERV, 0);
+	getnameinfo((const sockaddr*) &sa, sizeof(struct sockaddr_in6), dst_addr, NI_MAXHOST, serv, NI_MAXSERV, 0);
 
-*/
+
 	
-
+/*
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_src), src_addr, INET6_ADDRSTRLEN);
 	inet_ntop(AF_INET6, (void*)&(iph->ip6_dst), dst_addr, INET6_ADDRSTRLEN);
-	
+*/	
 	*offset = *offset + sizeof(ip6_hdr);
 }
 
 
 void callback(u_char* user, const struct pcap_pkthdr* header, const u_char* packet){
+	
+	tm* time;
+	time = localtime(&(header->ts.tv_sec));	
+	
+	for(int i = 0; i < CACHE_SIZE; i++){
+		if(strcmp(cache[i], (char*) packet) == 0){
+			printf("%02d:%02d:%02d.%d ", time->tm_hour, time->tm_min, time->tm_sec, (int)header->ts.tv_usec);
+			cout << ss[i].str();
+			printPacket((char*)packet, off[i], 0);
+			cout << endl;
+			printPacket((char*)packet, header->caplen, off[i]);
+			cout << endl;
+			return;
+		}
+	}
+
 	bool tcp = false;
 	u_short src_port, dst_port;
 	short offset = ETHERNET_SIZE;
-	
+	/*
 	char src_addr[INET6_ADDRSTRLEN];
 	char dst_addr[INET6_ADDRSTRLEN];
-	/*char src_addr[NI_MAXHOST];
-	char dst_addr[NI_MAXHOST];*/
+	*/
+	char src_addr[NI_MAXHOST];
+	char dst_addr[NI_MAXHOST];
 
 	ip* iph = (ip*)(packet + offset);
 	if (iph->ip_v == 4){
@@ -148,13 +173,19 @@ void callback(u_char* user, const struct pcap_pkthdr* header, const u_char* pack
 		udphdr* udp = (udphdr*)(packet + offset);
 		getInfo(udp, &src_port, &dst_port, &offset);
 	}
-	
-	tm* time;
-	time = localtime(&(header->ts.tv_sec));	
 	printf("%02d:%02d:%02d.%d ", time->tm_hour, time->tm_min, time->tm_sec, (int)header->ts.tv_usec);
+	
+	if(header->caplen < CACHE_BUFF){
+		strcpy(cache[ptr], (char *)packet);
+		off[ptr] = offset;
+		ss[ptr] << src_addr << " : " << src_port << " > " << dst_addr << " : " << dst_port << endl << endl;
+		ptr = (ptr+1)%CACHE_SIZE;
+	}
 	cout << src_addr << " : " << src_port << " > " << dst_addr << " : " << dst_port << endl << endl;
 
-	printPacket((char*)packet, header->caplen);
+	printPacket((char*)packet, offset, 0);
+	cout << endl;
+	printPacket((char*)packet, header->caplen, offset);
 	cout << endl;
 	/*printPacket((char*)packet, offset);
 	cout << endl;
